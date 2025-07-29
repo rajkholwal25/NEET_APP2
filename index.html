@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image & PDF to Text Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- PDF.js Library -->
+    <script src="https://mozilla.github.io/pdf.js/build/pdf.mjs" type="module"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .loader {
+            border-top-color: #3498db;
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
+        }
+        @-webkit-keyframes spin {
+            0% { -webkit-transform: rotate(0deg); }
+            100% { -webkit-transform: rotate(360deg); }
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Modal styles */
+        .modal-overlay {
+            transition: opacity 0.3s ease;
+        }
+        .modal-container {
+            transition: transform 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800 dark:text-white">File to Text Converter</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-2">Text nikalne ke liye image ya PDF upload karein.</p>
+        </div>
+
+        <!-- File Upload Section -->
+        <div class="mb-6">
+            <label for="fileUpload" class="block text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">File Upload Karein</label>
+            <div class="mt-2 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 dark:border-gray-600 border-dashed rounded-md">
+                <div class="space-y-1 text-center">
+                    <svg id="file-icon" class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 4v.01M28 8l-6-6-6 6M28 8v12a4 4 0 01-4 4H12a4 4 0 01-4-4V12a4 4 0 014-4h12z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <img id="imagePreview" src="#" alt="Image Preview" class="mx-auto max-h-48 rounded-md hidden"/>
+                    <p id="pdfPreview" class="text-gray-500 dark:text-gray-400 hidden"></p>
+                    <div class="flex text-sm text-gray-600 dark:text-gray-400">
+                        <label for="fileUpload" class="relative cursor-pointer bg-white dark:bg-gray-800 rounded-md font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                            <span>File upload karein</span>
+                            <input id="fileUpload" name="fileUpload" type="file" class="sr-only" accept="image/png, image/jpeg, image/webp, application/pdf">
+                        </label>
+                        <p class="pl-1">ya drag and drop karein</p>
+                    </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-500">PNG, JPG, WEBP, PDF 10MB tak</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Button -->
+        <div class="text-center mb-6">
+            <button id="extractBtn" class="w-full md:w-auto inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed transition-colors duration-300" disabled>
+                <svg id="loader" class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-5 w-5 mr-3 hidden" viewBox="0 0 24 24"></svg>
+                <span>Text Nikalein</span>
+            </button>
+        </div>
+        
+        <!-- Extracted Text Section -->
+        <div id="result-container" class="hidden">
+            <div class="flex justify-between items-center mb-2">
+                 <h2 class="text-lg font-medium text-gray-700 dark:text-gray-300">Nikala Gaya Text</h2>
+                 <button id="copyBtn" class="flex items-center text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+                     <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                     Copy
+                 </button>
+            </div>
+            <div id="extractedText" class="w-full p-4 bg-gray-50 dark:bg-gray-700 rounded-md min-h-[150px] whitespace-pre-wrap border border-gray-200 dark:border-gray-600"></div>
+        </div>
+        
+        <!-- On-Screen Playback Controls -->
+        <div id="onScreenPlaybackControls" class="hidden mt-4 flex items-center justify-center space-x-4">
+            <!-- Play Button -->
+            <button id="playBtn" class="p-3 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg flex items-center space-x-2" title="Play">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"></path></svg>
+                <span>Play</span>
+            </button>
+            <!-- Pause Button -->
+            <button id="pauseBtn" class="p-3 rounded-full bg-yellow-500 text-white hover:bg-yellow-600 shadow-lg flex items-center space-x-2" title="Pause">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M5.75 3.25a.75.75 0 00-.75.75v12a.75.75 0 001.5 0V4A.75.75 0 005.75 3.25zm8.5 0a.75.75 0 00-.75.75v12a.75.75 0 001.5 0V4a.75.75 0 00-.75-.75z"></path></svg>
+                 <span>Pause</span>
+            </button>
+            <!-- Finish Button -->
+            <button id="finishSpeechBtn" class="px-6 py-3 rounded-full bg-red-600 text-white hover:bg-red-700 shadow-lg font-medium flex items-center space-x-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M5 5h10v10H5V5z" /></svg>
+                <span>Finish</span>
+            </button>
+        </div>
+
+        <!-- Error Message Box -->
+        <div id="errorBox" class="hidden mt-4 p-4 bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-200 rounded-md">
+            <p id="errorMessage"></p>
+        </div>
+    </div>
+
+    <!-- Speech Modal -->
+    <div id="speechModal" class="modal-overlay fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 hidden opacity-0">
+        <div class="modal-container bg-white dark:bg-gray-800 w-full max-w-md rounded-lg shadow-xl p-6 transform scale-95">
+            <!-- Initial Question -->
+            <div id="listenQuestion">
+                <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white">Text Sunein</h3>
+                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Kya aap nikale gaye text ko sunna chahte hain?</p>
+                <div class="mt-4 flex justify-end space-x-3">
+                    <button id="noListenBtn" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600">Nahi</button>
+                    <button id="yesListenBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Haan</button>
+                </div>
+            </div>
+            <!-- Voice Selection -->
+            <div id="voiceSelection" class="hidden">
+                <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white">Awaaz Chunein</h3>
+                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Sunne ke liye कृपया ek awaaz chunein.</p>
+                <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <button id="maleVoiceBtn" class="w-full flex items-center justify-center px-4 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">Ladke ki Awaaz</button>
+                    <button id="femaleVoiceBtn" class="w-full flex items-center justify-center px-4 py-3 border border-transparent text-base font-medium rounded-md text-white bg-pink-500 hover:bg-pink-600">Ladki ki Awaaz</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script type="module">
+        // Import PDF.js
+        const { pdfjsLib } = globalThis;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://mozilla.github.io/pdf.js/build/pdf.worker.mjs';
+
+        // --- DOM element references ---
+        const fileUpload = document.getElementById('fileUpload');
+        const imagePreview = document.getElementById('imagePreview');
+        const pdfPreview = document.getElementById('pdfPreview');
+        const fileIcon = document.getElementById('file-icon');
+        const extractBtn = document.getElementById('extractBtn');
+        const loader = document.getElementById('loader');
+        const resultContainer = document.getElementById('result-container');
+        const extractedText = document.getElementById('extractedText');
+        const copyBtn = document.getElementById('copyBtn');
+        const errorBox = document.getElementById('errorBox');
+        const errorMessage = document.getElementById('errorMessage');
+
+        // Modal DOM elements
+        const speechModal = document.getElementById('speechModal');
+        const modalContainer = speechModal.querySelector('.modal-container');
+        const listenQuestion = document.getElementById('listenQuestion');
+        const voiceSelection = document.getElementById('voiceSelection');
+        const noListenBtn = document.getElementById('noListenBtn');
+        const yesListenBtn = document.getElementById('yesListenBtn');
+        const maleVoiceBtn = document.getElementById('maleVoiceBtn');
+        const femaleVoiceBtn = document.getElementById('femaleVoiceBtn');
+        
+        // On-screen playback controls
+        const onScreenPlaybackControls = document.getElementById('onScreenPlaybackControls');
+        const playBtn = document.getElementById('playBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const finishSpeechBtn = document.getElementById('finishSpeechBtn');
+
+        // --- State variables ---
+        let fileData = null;
+        let fileType = null;
+        let voices = [];
+        let chosenGender = null;
+        let utterance = null;
+        let speechState = 'stopped'; // Can be 'stopped', 'playing', 'paused'
+        let lastSpokenCharIndex = 0; // To track progress
+        
+        // --- Speech Synthesis Setup ---
+        const synth = window.speechSynthesis;
+
+        // Function to populate the voices array
+        function populateVoiceList() {
+            voices = synth.getVoices();
+        }
+        
+        // Initial population and setup listener for changes
+        populateVoiceList();
+        if (synth.onvoiceschanged !== undefined) {
+            synth.onvoiceschanged = populateVoiceList;
+        }
+
+        // --- UI Functions ---
+        
+        fileUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                fullReset(); // Perform a full reset for a new file
+                fileIcon.classList.remove('hidden');
+
+                if (!['image/png', 'image/jpeg', 'image/webp', 'application/pdf'].includes(file.type)) {
+                    showError('Anya file type. Kripya PNG, JPG, WEBP, ya PDF file upload karein.');
+                    return;
+                }
+                if (file.size > 10 * 1024 * 1024) {
+                    showError('File bahut badi hai. Adhiktam size 10MB hai.');
+                    return;
+                }
+                
+                fileType = file.type;
+                const reader = new FileReader();
+
+                if (fileType.startsWith('image/')) {
+                    reader.onload = (event) => {
+                        imagePreview.src = event.target.result;
+                        imagePreview.classList.remove('hidden');
+                        fileIcon.classList.add('hidden');
+                        fileData = event.target.result.split(',')[1];
+                    };
+                    reader.readAsDataURL(file);
+                } else if (fileType === 'application/pdf') {
+                    pdfPreview.textContent = `PDF Chuna Gaya: ${file.name}`;
+                    pdfPreview.classList.remove('hidden');
+                    fileIcon.classList.add('hidden');
+                    reader.onload = (event) => {
+                        fileData = new Uint8Array(event.target.result);
+                    };
+                    reader.readAsArrayBuffer(file);
+                }
+                
+                extractBtn.disabled = false;
+                hideError();
+            }
+        });
+
+        extractBtn.addEventListener('click', async () => {
+            if (!fileData) {
+                showError('Pahle file upload karein.');
+                return;
+            }
+
+            setLoading(true);
+            hideError();
+            resultContainer.classList.add('hidden');
+            stopSpeech(); // Stop any ongoing speech
+
+            try {
+                let text = '';
+                if (fileType.startsWith('image/')) {
+                    text = await extractTextFromImage(fileData);
+                } else if (fileType === 'application/pdf') {
+                    text = await extractTextFromPdf(fileData);
+                }
+                extractedText.textContent = text.trim();
+                resultContainer.classList.remove('hidden');
+                
+                if (text.trim().length > 0) {
+                    showSpeechModal();
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                showError(`Ek galti hui: ${error.message}`);
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        // --- Modal Logic ---
+
+        function showSpeechModal() {
+            listenQuestion.classList.remove('hidden');
+            voiceSelection.classList.add('hidden');
+            speechModal.classList.remove('hidden');
+            setTimeout(() => {
+                speechModal.classList.remove('opacity-0');
+                modalContainer.classList.remove('scale-95');
+            }, 10);
+        }
+
+        function hideSpeechModal() {
+            speechModal.classList.add('opacity-0');
+            modalContainer.classList.add('scale-95');
+            setTimeout(() => speechModal.classList.add('hidden'), 300);
+        }
+
+        noListenBtn.addEventListener('click', hideSpeechModal);
+        
+        yesListenBtn.addEventListener('click', () => {
+            listenQuestion.classList.add('hidden');
+            voiceSelection.classList.remove('hidden');
+        });
+
+        maleVoiceBtn.addEventListener('click', () => {
+            chosenGender = 'male';
+            prepareAndShowControls();
+        });
+        femaleVoiceBtn.addEventListener('click', () => {
+            chosenGender = 'female';
+            prepareAndShowControls();
+        });
+
+        // --- Speech Functions ---
+        
+        function prepareAndShowControls() {
+            hideSpeechModal();
+            onScreenPlaybackControls.classList.remove('hidden');
+            extractBtn.disabled = true;
+            speechState = 'stopped';
+            lastSpokenCharIndex = 0;
+            // "Wake up" the speech synthesis engine.
+            synth.cancel(); 
+        }
+
+        function stopSpeech() {
+            if (synth.speaking || synth.pending) {
+                speechState = 'stopped';
+                synth.cancel();
+            }
+        }
+
+        function fullReset() {
+            stopSpeech();
+            onScreenPlaybackControls.classList.add('hidden');
+            resultContainer.classList.add('hidden');
+            extractedText.textContent = '';
+            fileUpload.value = '';
+            fileData = null;
+            fileType = null;
+            chosenGender = null;
+            utterance = null;
+            lastSpokenCharIndex = 0;
+            speechState = 'stopped';
+            imagePreview.src = '#';
+            imagePreview.classList.add('hidden');
+            pdfPreview.textContent = '';
+            pdfPreview.classList.add('hidden');
+            if (!extractBtn.querySelector('#loader:not(.hidden)')) {
+                extractBtn.disabled = true;
+            }
+        }
+
+        playBtn.addEventListener('click', () => {
+            if (!extractedText.textContent.trim()) {
+                showError("Bolne ke liye koi text nahi hai.");
+                return;
+            }
+            
+            // If paused, just resume.
+            if (speechState === 'paused') {
+                speechState = 'playing';
+                synth.resume();
+                return;
+            }
+
+            if (speechState === 'playing') {
+                return;
+            }
+
+            // Stop any previous utterance before starting a new one
+            stopSpeech();
+
+            // Use a small timeout to ensure the previous cancel command has processed
+            setTimeout(() => {
+                const fullText = extractedText.textContent;
+                const textToSpeak = fullText.substring(lastSpokenCharIndex);
+                
+                utterance = new SpeechSynthesisUtterance(textToSpeak);
+                
+                let selectedVoice = null;
+                if (chosenGender === 'female') {
+                    selectedVoice = voices.find(voice => voice.lang.startsWith('en') && voice.name.toLowerCase().includes('female'));
+                    if (!selectedVoice) selectedVoice = voices.find(voice => voice.lang.startsWith('en') && (voice.name.includes('Zira') || voice.name.includes('Susan')));
+                } else { // 'male'
+                    selectedVoice = voices.find(voice => voice.lang.startsWith('en') && voice.name.toLowerCase().includes('male'));
+                    if (!selectedVoice) selectedVoice = voices.find(voice => voice.lang.startsWith('en') && (voice.name.includes('David') || voice.name.includes('Google UK English Male')));
+                }
+                if(!selectedVoice) selectedVoice = voices.find(voice => voice.lang.startsWith('en')); // Fallback
+                
+                utterance.voice = selectedVoice;
+
+                // Track progress using the 'boundary' event
+                const startingCharIndex = lastSpokenCharIndex;
+                utterance.onboundary = (event) => {
+                    if (event.name === 'word') {
+                       lastSpokenCharIndex = startingCharIndex + event.charIndex;
+                    }
+                };
+
+                utterance.onend = () => {
+                    speechState = 'stopped';
+                    lastSpokenCharIndex = 0;
+                    onScreenPlaybackControls.classList.add('hidden');
+                    extractBtn.disabled = false;
+                };
+
+                utterance.onerror = (event) => {
+                    speechState = 'stopped';
+                    showError(`Awaaz mein galti hui: ${event.error}`);
+                };
+                
+                speechState = 'playing';
+                synth.speak(utterance);
+            }, 100); // 100ms delay
+        });
+
+        pauseBtn.addEventListener('click', () => {
+             if (speechState === 'playing') {
+                speechState = 'paused';
+                synth.pause();
+             }
+        });
+
+        finishSpeechBtn.addEventListener('click', fullReset);
+
+        // --- Helper Functions ---
+
+        async function extractTextFromImage(base64ImageData) {
+            const apiKey = ""; // <-- APNI API KEY YAHAN PASTE KAREIN
+            if (!apiKey) {
+                throw new Error("Google AI API Key nahi mili. Kripya script mein apni API key daalein taaki image se text nikala ja sake.");
+            }
+            const payload = { contents: [{ parts: [{ text: "Extract all text from this image." }, { inlineData: { mimeType: "image/jpeg", data: base64ImageData } }] }] };
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`); }
+            const result = await response.json();
+            if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) { return result.candidates[0].content.parts[0].text; } 
+            else { throw new Error("Image se text nahi nikal paya."); }
+        }
+
+        async function extractTextFromPdf(pdfData) {
+            const pdfDataCopy = new Uint8Array(pdfData);
+            const loadingTask = pdfjsLib.getDocument({ data: pdfDataCopy });
+            const pdf = await loadingTask.promise;
+            let fullText = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map(item => item.str).join(' ');
+                fullText += pageText + '\n\n';
+            }
+            return fullText;
+        }
+
+        copyBtn.addEventListener('click', () => {
+            const textArea = document.createElement('textarea');
+            textArea.value = extractedText.textContent;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                 document.execCommand('copy');
+                 const originalContent = copyBtn.innerHTML;
+                 copyBtn.innerHTML = '<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Copied!';
+                 setTimeout(() => {
+                     copyBtn.innerHTML = originalContent;
+                 }, 2000);
+            } catch (err) {
+                console.error('Text copy karne mein fail: ', err);
+                showError('Clipboard mein text copy nahi ho paya.');
+            }
+            document.body.removeChild(textArea);
+        });
+
+        function setLoading(isLoading) {
+            const buttonText = extractBtn.querySelector('span');
+            if (isLoading) {
+                loader.classList.remove('hidden');
+                extractBtn.disabled = true;
+                if(buttonText) buttonText.textContent = 'Nikal Raha Hai...';
+            } else {
+                loader.classList.add('hidden');
+                if(fileData) extractBtn.disabled = false;
+                if(buttonText) buttonText.textContent = 'Text Nikalein';
+            }
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorBox.classList.remove('hidden');
+        }
+
+        function hideError() {
+            errorBox.classList.add('hidden');
+        }
+
+    </script>
+</body>
+</html>

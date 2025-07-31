@@ -249,7 +249,8 @@
             try {
                 let text = '';
                 if (fileType.startsWith('image/')) {
-                    text = await extractTextFromImage(fileData);
+                    // Pass the correct fileType to the extraction function
+                    text = await extractTextFromImage(fileData, fileType);
                 } else if (fileType === 'application/pdf') {
                     text = await extractTextFromPdf(fileData);
                 }
@@ -408,8 +409,8 @@
 
         pauseBtn.addEventListener('click', () => {
              if (speechState === 'playing') {
-                speechState = 'paused';
-                synth.pause();
+                 speechState = 'paused';
+                 synth.pause();
              }
         });
 
@@ -417,18 +418,35 @@
 
         // --- Helper Functions ---
 
-        async function extractTextFromImage(base64ImageData) {
-            const apiKey = ""; // <-- APNI API KEY YAHAN PASTE KAREIN
-            if (!apiKey) {
-                throw new Error("Google AI API Key nahi mili. Kripya script mein apni API key daalein taaki image se text nikala ja sake.");
-            }
-            const payload = { contents: [{ parts: [{ text: "Extract all text from this image." }, { inlineData: { mimeType: "image/jpeg", data: base64ImageData } }] }] };
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        async function extractTextFromImage(base64ImageData, mimeType) {
+            const apiKey = ""; // This will be handled by the environment for the correct model.
+            
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: "Extract all text from this image." },
+                        { inlineData: { mimeType: mimeType, data: base64ImageData } }
+                    ]
+                }]
+            };
+            // Use the correct model that doesn't require a user-provided API key in this environment.
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
             const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`); }
+            if (!response.ok) { 
+                const errorText = await response.text();
+                try {
+                    const errorData = JSON.parse(errorText);
+                    throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
+                } catch (e) {
+                    throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+                }
+            }
             const result = await response.json();
             if (result.candidates && result.candidates[0]?.content?.parts?.[0]?.text) { return result.candidates[0].content.parts[0].text; } 
-            else { throw new Error("Image se text nahi nikal paya."); }
+            else { 
+                console.log("Unexpected API response:", result);
+                throw new Error("Image se text nahi nikal paya. Unexpected API response."); 
+            }
         }
 
         async function extractTextFromPdf(pdfData) {
